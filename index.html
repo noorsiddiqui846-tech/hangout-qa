@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hangout?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    font-family: "Fredoka", "Comic Sans MS", system-ui, sans-serif;
+    color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    transition: color .6s;
+  }
+
+  /* ---------- Themes (one per question) ---------- */
+  body[data-theme="party"] {
+    --ink: #3a1d4a; --hint: #7a5a8a;
+    --main-bg: linear-gradient(135deg, #ff5fa2, #ff9a3c);
+    --run-ink: #8a5aa8; --run-border: #d7b8f0;
+    --shadow: rgba(90, 40, 120, .25);
+  }
+  body[data-theme="cafe"] {
+    --ink: #4a2c1d; --hint: #8a6450;
+    --main-bg: linear-gradient(135deg, #f4845f, #e0a458);
+    --run-ink: #8a5a3c; --run-border: #e6c3a3;
+    --shadow: rgba(110, 60, 30, .28);
+  }
+  body[data-theme="cozy"] {
+    --ink: #2f3160; --hint: #6a6c9a;
+    --main-bg: linear-gradient(135deg, #7f8cff, #c77dff);
+    --run-ink: #6a5acd; --run-border: #c9c3f5;
+    --shadow: rgba(60, 60, 140, .25);
+  }
+  .bg-cozy  { background: linear-gradient(-45deg, #a1c4fd, #c2e9fb, #d4c1ec, #fbc2eb, #b8e1ff, #e0c3fc); }
+  body[data-theme="weekend"] {
+    --ink: #4a2a10; --hint: #8a5a30;
+    --main-bg: linear-gradient(135deg, #ff6f61, #ffb347);
+    --run-ink: #c25a2a; --run-border: #ffd0a8;
+    --shadow: rgba(160, 80, 20, .25);
+  }
+  .bg-weekend { background: linear-gradient(-45deg, #ffe29f, #ffa99f, #ff719a, #ffd194, #fbd786, #f7797d); }
+  .bg-party { background: linear-gradient(-45deg, #ff9a9e, #fad0c4, #a18cd1, #fbc2eb, #84fab0, #8fd3f4); }
+  .bg-cafe  { background: linear-gradient(-45deg, #f6d5b1, #e8a87c, #ffcf9f, #d9a47e, #f7b267, #fbe3c6); }
+
+  /* Background layers crossfade when the question changes */
+  .bg {
+    position: fixed; inset: 0; z-index: -1;
+    background-size: 400% 400% !important;
+    animation: bgShift 14s ease infinite;
+    opacity: 0; transition: opacity .8s ease;
+  }
+  .bg.show { opacity: 1; }
+  @keyframes bgShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Floating emoji in the background */
+  .floaty {
+    position: fixed; bottom: -60px; font-size: 32px; opacity: .7;
+    animation: floatUp linear infinite; pointer-events: none; user-select: none;
+    transition: opacity .6s;
+  }
+  .floaty.fade { opacity: 0; }
+  @keyframes floatUp {
+    to { transform: translateY(-120vh) rotate(360deg); }
+  }
+
+  .card {
+    position: relative; z-index: 1;
+    background: rgba(255, 255, 255, .85); backdrop-filter: blur(8px);
+    width: min(460px, calc(100vw - 32px)); padding: 36px 24px 40px;
+    max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto;
+    border-radius: 28px; text-align: center;
+    box-shadow: 0 20px 50px var(--shadow);
+    border: 3px solid #fff;
+    animation: pop .45s ease;
+  }
+  @keyframes pop {
+    from { transform: scale(.85); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  .emoji { font-size: 72px; display: inline-block; animation: bounce 1.6s ease-in-out infinite; }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50%      { transform: translateY(-12px) rotate(4deg); }
+  }
+  h1 { font-size: 2rem; margin: 12px 0 6px; line-height: 1.2; }
+  .hint { margin: 0 0 26px; color: var(--hint); font-size: 1rem; min-height: 1.3em; }
+
+  .buttons {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+    gap: 14px; min-height: 64px;
+  }
+  .btn {
+    font-family: inherit; font-weight: 700; font-size: 1.2rem;
+    padding: 13px 26px; border-radius: 999px; border: 0; cursor: pointer;
+    box-shadow: 0 6px 0 rgba(0,0,0,.15);
+  }
+  .btn:active { box-shadow: 0 3px 0 rgba(0,0,0,.15); }
+  .main {
+    background: var(--main-bg); color: #fff;
+    transform: scale(var(--grow, 1)); transition: transform .25s;
+  }
+  .main:hover { filter: brightness(1.08); }
+  .run {
+    background: #fff; color: var(--run-ink); border: 3px solid var(--run-border);
+    transition: left .25s ease, top .25s ease;
+    touch-action: none; z-index: 5;
+  }
+  .run.runaway { position: fixed; }
+
+  /* Name step */
+  .name-form { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .name-input {
+    font-family: inherit; font-size: 1.2rem; font-weight: 500; text-align: center;
+    width: min(300px, 100%); padding: 12px 20px; border-radius: 999px;
+    border: 3px solid var(--run-border); color: var(--ink); background: #fff; outline: none;
+  }
+  .name-input:focus { border-color: var(--run-ink); }
+  .shake { animation: shake .4s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+
+  /* Day step */
+  .days { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .day {
+    font-family: inherit; font-weight: 700; font-size: 1rem; cursor: pointer;
+    padding: 10px 2px; border-radius: 16px; line-height: 1.2; white-space: nowrap;
+    background: #fff; color: var(--run-ink); border: 3px solid var(--run-border);
+    box-shadow: 0 5px 0 rgba(0,0,0,.1); transition: transform .15s, background .15s;
+  }
+  .day small { display: block; font-weight: 500; font-size: .85rem; opacity: .8; }
+  .day:hover { transform: translateY(-3px); background: var(--run-border); }
+  .day-escape { margin-top: 14px; min-height: 0; }
+  .day-escape .btn { font-size: 1rem; padding: 10px 22px; }
+
+  /* Day step has the most content, so it gets a tighter card */
+  .card.compact { padding: 26px 20px 28px; }
+  .card.compact .emoji { font-size: 52px; }
+  .card.compact h1 { font-size: 1.6rem; margin-top: 6px; }
+  .card.compact .hint { margin-bottom: 16px; }
+
+  /* Phones */
+  @media (max-width: 480px) {
+    .card { padding: 28px 16px 30px; }
+    .emoji { font-size: 60px; }
+    h1 { font-size: 1.6rem; }
+    .card.compact { padding: 22px 14px 24px; }
+    .card.compact h1 { font-size: 1.35rem; }
+    .days { gap: 6px; }
+    .day { font-size: .85rem; padding: 9px 1px; border-width: 2px; }
+    .day small { font-size: .75rem; }
+  }
+  /* Short screens (landscape phones, small laptops) */
+  @media (max-height: 600px) {
+    .card.compact .emoji { font-size: 38px; animation: none; }
+    .card.compact h1 { font-size: 1.3rem; margin: 2px 0 4px; }
+    .card.compact .hint { margin-bottom: 10px; }
+    .day { padding: 6px 2px; }
+  }
+
+  /* Celebration */
+  .celebrate h1 { font-size: 2.2rem; }
+  .celebrate p { font-size: 1.15rem; color: var(--hint); margin: 8px 0 0; }
+  .recap {
+    margin: 22px 0 20px; padding: 16px 18px; text-align: left;
+    background: #fff6fb; border: 2px dashed #f3b6d4; border-radius: 20px;
+  }
+  .recap-title { font-weight: 700; text-align: center; margin-bottom: 10px; }
+  .recap-row {
+    display: flex; justify-content: space-between; gap: 12px; padding: 7px 0;
+    border-bottom: 1px solid #f7d6e7; font-size: .95rem;
+  }
+  .recap-row span { color: var(--hint); }
+  .recap-row b { text-align: right; }
+  .recap-dodges { text-align: center; margin-top: 10px; font-size: .95rem; color: var(--hint); }
+  .whatsapp {
+    display: inline-block; text-decoration: none; color: #fff;
+    background: linear-gradient(135deg, #25d366, #128c7e);
+  }
+  .whatsapp:hover { filter: brightness(1.08); }
+  .confetti {
+    position: fixed; top: -20px; width: 10px; height: 16px; border-radius: 3px;
+    animation: fall linear forwards; pointer-events: none; z-index: 10;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(720deg); }
+  }
+</style>
+</head>
+<body data-theme="party">
+
+<div class="card" id="card"></div>
+
+<script>
+  // ---------- Steps ----------
+  // Each step picks a theme (background + colors + floating emoji).
+  // Buttons with run: true escape the cursor; the others can be clicked.
+  // Text can be a function of the answers so far: s.name, s.when ("on Saturday").
+  const state = { name: "", when: "on Saturday", answers: [], dodges: 0 };
+
+  // Your WhatsApp number with country code, digits only (e.g. "923001234567").
+  // Leave empty to let her choose who to send it to.
+  const WHATSAPP_NUMBER = "";
+
+  const QUESTIONS = [
+    {
+      type: "name",
+      theme: "party",
+      emoji: "👋",
+      question: "Hey you! Who's this?",
+      hint: "Type your name so I know who I'm asking 😌",
+      placeholder: "Your name…",
+      button: "That's me! ✨",
+      empty: "Psst… I need a name first 👀",
+    },
+    {
+      theme: "party",
+      emoji: "🥺",
+      question: s => `${s.name}, are you free to hang out?`,
+      recap: "Free to hang out?",
+      buttons: [
+        { label: "Yes! 🎉" },
+        { label: "No", run: true },
+      ],
+      teases: [
+        "Hmm, that button seems shy 👀",
+        "Nope, try again 😜",
+        "Too slow! 🏃‍♀️",
+        "The No button doesn't want to be clicked 🙈",
+        "Just press Yes already 😂",
+        "Resistance is futile 💅",
+        "You know you want to 😏",
+      ],
+    },
+    {
+      type: "day",
+      theme: "weekend",
+      emoji: "🗓️",
+      question: s => `Okay ${s.name}, when are we doing this? 👀`,
+      recap: "When?",
+      hint: "Pick any day, I'm free 😌",
+      escape: "None of these 🙅",
+      teases: [
+        "None? Not an option 😜",
+        "That button has other plans 🏃‍♀️",
+        "Nice try, pick a day 🗓️",
+        "Every day is a good day to hang out 😌",
+        "I'll wait… but just pick one 😏",
+        "Excuses are not accepted here 💅",
+      ],
+    },
+    {
+      theme: "cafe",
+      emoji: "😋",
+      question: "Coffee or lunch?",
+      recap: "Coffee or lunch?",
+      buttons: [
+        { label: "☕ Coffee", run: true },
+        { label: "🍔 Lunch", run: true },
+        { label: "Both! 💕" },
+      ],
+      teases: [
+        "Why choose when you can have both? 😋",
+        "Coffee ran away ☕💨",
+        "Lunch is feeling shy today 🙈",
+        "Nice try! 😜",
+        "Both is the only right answer 😌",
+        "Double the food, double the fun 💕",
+      ],
+    },
+    {
+      theme: "cozy",
+      emoji: "🥹",
+      question: "I'm not bothering you, am I?",
+      recap: "Am I bothering you?",
+      buttons: [
+        { label: "YES! YOU ARE!", run: true },
+        { label: "Nope! Not at all 💞" },
+      ],
+      teases: [
+        "Hehe, I knew you'd say that 😌",
+        "That button is lying anyway 🤥",
+        "Wrong answer, try again 😜",
+        "See? Even the button disagrees 🙃",
+        "You love my company, admit it 💞",
+        "Nice try 😏",
+      ],
+    },
+    {
+      theme: "weekend",
+      emoji: "😎",
+      question: s => `So you'll be ready ${s.when}, right?`,
+      recap: "Will you be ready?",
+      buttons: [
+        { label: "No way!", run: true },
+        { label: "Alright, I'll be there! 🙌" },
+      ],
+      teases: [
+        "No way? No way you're saying no 😜",
+        "Too late, it's already in my calendar 🗓️",
+        "That button has plans… to run away 🏃‍♀️",
+        "Nope, not accepted 🙅‍♀️",
+        "Just say you'll be there 😌",
+        "It's booked, sorry not sorry 💅",
+      ],
+    },
+  ];
+
+  const THEMES = {
+    party: ["💖", "✨", "🌸", "🍕", "🎈", "🧋", "🌈", "💫", "🍦"],
+    cafe:  ["☕", "🥐", "🍔", "🍝", "🥪", "🧁", "🍰", "🌮", "🥗", "🍩"],
+    cozy:  ["☁️", "🧸", "💭", "🫶", "🌷", "🐶", "🍬", "💞", "🌙"],
+    weekend: ["☀️", "🗓️", "🎉", "😎", "🚗", "🎶", "⏰", "✨", "🌻"],
+  };
+
+  const FINAL = {
+    theme: "party",
+    emoji: "🥳",
+    title: s => `Yaaay! See you ${s.when}!`,
+    message: s => `Can't wait to hang out with you, ${s.name} 💖`,
+    recapTitle: "📝 Your answers",
+    dodgeLine: n => `Tried to say no: <b>${n}</b> time${n === 1 ? "" : "s"} 😂`,
+    whatsappButton: "Send on WhatsApp 💬",
+    whatsappMessage: s => `See you ${s.when}! 💕 — ${s.name}`,
+  };
+
+  // Resolve text that may depend on the answers; escape the typed name
+  const text = t => typeof t === "function"
+    ? t({ ...state, name: escapeHtml(state.name) }) : t;
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  // ---------- Sounds (made with Web Audio, no files needed) ----------
+  let audio = null;
+  function getAudio() {
+    if (!audio) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audio = new Ctx();
+    }
+    if (audio.state === "suspended") audio.resume();
+    return audio;
+  }
+  // Browsers only allow sound after the first tap or key press
+  ["pointerdown", "keydown"].forEach(ev =>
+    document.addEventListener(ev, getAudio, { once: true }));
+
+  function tone(freq, start, length, { type = "sine", volume = 0.2, slideTo } = {}) {
+    const ctx = getAudio();
+    if (!ctx) return;
+    const t = ctx.currentTime + start;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + length);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + length + 0.02);
+  }
+
+  // Short, bouncy "boop", a little different each time
+  function playBoop() {
+    const f = 380 + Math.random() * 160;
+    tone(f, 0, 0.16, { slideTo: f * 1.8, volume: 0.25 });
+  }
+
+  // Happy "ta-da!" fanfare with sparkles on top
+  function playCheer() {
+    [523, 659, 784, 1047].forEach((f, i) =>
+      tone(f, i * 0.11, 0.3, { type: "triangle", volume: 0.18 }));
+    tone(1047, 0.44, 0.7, { type: "triangle", volume: 0.2 });
+    tone(1319, 0.44, 0.7, { type: "triangle", volume: 0.12 });
+    for (let i = 0; i < 8; i++)
+      tone(1500 + Math.random() * 1500, 0.5 + i * 0.07, 0.12, { volume: 0.06 });
+  }
+
+  // ---------- Background & floating emoji ----------
+  let bgLayer = null;
+  let floaties = [];
+
+  function setTheme(theme) {
+    if (document.body.dataset.theme === theme && bgLayer) return;
+    document.body.dataset.theme = theme;
+
+    const layer = document.createElement("div");
+    layer.className = "bg bg-" + theme;
+    document.body.prepend(layer);
+    requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add("show")));
+    const old = bgLayer;
+    if (old) setTimeout(() => old.remove(), 900);
+    bgLayer = layer;
+
+    floaties.forEach(f => { f.classList.add("fade"); setTimeout(() => f.remove(), 700); });
+    floaties = [];
+    const icons = THEMES[theme];
+    for (let i = 0; i < 16; i++) {
+      const f = document.createElement("span");
+      f.className = "floaty";
+      f.textContent = icons[i % icons.length];
+      f.style.left = Math.random() * 100 + "vw";
+      f.style.fontSize = 22 + Math.random() * 26 + "px";
+      f.style.animationDuration = 10 + Math.random() * 12 + "s";
+      f.style.animationDelay = -Math.random() * 20 + "s";
+      document.body.appendChild(f);
+      floaties.push(f);
+    }
+  }
+
+  // ---------- Questions flow ----------
+  const card = document.getElementById("card");
+  let current = 0;
+  let dodges = 0;
+
+  function next() {
+    current++;
+    if (current < QUESTIONS.length) showQuestion(current);
+    else showFinal();
+  }
+
+  function showQuestion(i) {
+    const q = QUESTIONS[i];
+    dodges = 0;
+    clearRunaways();
+    setTheme(q.theme);
+
+    card.className = "card";
+    card.style.animation = "none"; card.offsetWidth; card.style.animation = "";
+
+    if (q.type === "name") return showNameStep(q);
+    if (q.type === "day") return showDayStep(q);
+
+    card.innerHTML = `
+      <div class="emoji">${q.emoji}</div>
+      <h1>${text(q.question)}</h1>
+      <p class="hint" id="hint"></p>
+      <div class="buttons">
+        ${q.buttons.map(b => `<button class="btn ${b.run ? "run" : "main"}">${b.label}</button>`).join("")}
+      </div>`;
+
+    card.querySelectorAll(".main").forEach(btn => btn.addEventListener("click", () => {
+      state.answers.push({ q: q.recap, a: btn.textContent });
+      next();
+    }));
+
+    setUpRunaways();
+  }
+
+  // Touch / click / keyboard on a runaway button: it escapes instead
+  function setUpRunaways() {
+    card.querySelectorAll(".run").forEach(btn => {
+      btn.addEventListener("pointerdown", e => { e.preventDefault(); runAway(btn); });
+      btn.addEventListener("click", e => { e.preventDefault(); runAway(btn); });
+      btn.addEventListener("focus", () => { btn.blur(); runAway(btn); });
+    });
+  }
+
+  function showNameStep(q) {
+    card.innerHTML = `
+      <div class="emoji">${q.emoji}</div>
+      <h1>${q.question}</h1>
+      <p class="hint" id="hint">${q.hint}</p>
+      <form class="name-form">
+        <input class="name-input" id="name" maxlength="24" autocomplete="off"
+               placeholder="${q.placeholder}" value="${escapeHtml(state.name)}">
+        <button class="btn main" type="submit">${q.button}</button>
+      </form>`;
+    const input = card.querySelector("#name");
+    input.focus();
+    card.querySelector("form").addEventListener("submit", e => {
+      e.preventDefault();
+      const name = input.value.trim();
+      if (!name) {
+        document.getElementById("hint").textContent = q.empty;
+        input.classList.remove("shake"); input.offsetWidth; input.classList.add("shake");
+        input.focus();
+        return;
+      }
+      state.name = name;
+      next();
+    });
+  }
+
+  // Next 7 days, starting today
+  function showDayStep(q) {
+    const days = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date();
+      date.setDate(date.getDate() + d);
+      const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
+      const short = date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      days.push({
+        label: d === 0 ? "Today" : d === 1 ? "Tomorrow" : weekday.slice(0, 3),
+        sub: short,
+        full: `${weekday}, ${short}`,
+        when: d === 0 ? "today" : d === 1 ? "tomorrow" : "on " + weekday,
+      });
+    }
+    card.classList.add("compact");
+    card.innerHTML = `
+      <div class="emoji">${q.emoji}</div>
+      <h1>${text(q.question)}</h1>
+      <p class="hint" id="hint">${q.hint}</p>
+      <div class="days">
+        ${days.map((d, i) => `<button class="day" data-i="${i}">${d.label}<small>${d.sub}</small></button>`).join("")}
+      </div>
+      <div class="buttons day-escape"><button class="btn run">${q.escape}</button></div>`;
+    setUpRunaways();
+    card.querySelectorAll(".day").forEach(btn => btn.addEventListener("click", () => {
+      const d = days[btn.dataset.i];
+      state.when = d.when;
+      state.answers.push({ q: q.recap, a: `${d.full} 🗓️` });
+      next();
+    }));
+  }
+
+  // Cursor gets close to a runaway button -> it hops away. Only for a
+  // hovering mouse: on touch screens a finger moving means scrolling, and a
+  // pressed mouse button means dragging the scrollbar or selecting text.
+  document.addEventListener("pointermove", e => {
+    if (e.pointerType === "touch" || e.buttons) return;
+    document.querySelectorAll(".run").forEach(btn => {
+      const r = btn.getBoundingClientRect();
+      const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      // Short cooldown so it finishes one hop before starting the next
+      if (dist < Math.max(r.width, r.height) / 2 + 60 && Date.now() - (btn._lastHop || 0) > 280) {
+        runAway(btn, e.clientX, e.clientY);
+      }
+    });
+  });
+
+  function runAway(btn, px, py) {
+    btn._lastHop = Date.now();
+    const r = btn.getBoundingClientRect();
+    const w = r.width, h = r.height;
+    const cur = { x: r.left + w / 2, y: r.top + h / 2 };
+
+    // First escape: pin every runaway button where it is, so the others
+    // don't shift in the row, and remember each one's starting point
+    if (!btn.classList.contains("runaway")) {
+      card.querySelectorAll(".run:not(.runaway)").forEach(b => {
+        const br = b.getBoundingClientRect();
+        b._home = { x: br.left + br.width / 2, y: br.top + br.height / 2 };
+        b.style.width = br.width + "px";
+        b.style.left = br.left + "px";
+        b.style.top = br.top + "px";
+      });
+      // Placeholders keep the clickable button(s) from sliding over. The
+      // buttons move to <body> because the card's blur effect would make
+      // position: fixed relative to the card instead of the screen.
+      card.querySelectorAll(".run:not(.runaway)").forEach(b => {
+        const ph = document.createElement("span");
+        ph.style.cssText = `display:inline-block;width:${b.offsetWidth}px;height:${b.offsetHeight}px`;
+        b.before(ph);
+        b.classList.add("runaway");
+        document.body.appendChild(b);
+      });
+      btn.offsetWidth; // apply positions before moving
+    }
+
+    const next = pickSpot(btn, w, h, cur, px ?? cur.x, py ?? cur.y);
+    btn.style.left = next.x - w / 2 + "px";
+    btn.style.top = next.y - h / 2 + "px";
+
+    dodges++;
+    state.dodges++;
+    playBoop();
+    const teases = QUESTIONS[current].teases;
+    document.getElementById("hint").textContent = teases[(dodges - 1) % teases.length];
+    // Clickable button(s) get a little bigger every time
+    card.querySelectorAll(".main").forEach(b =>
+      b.style.setProperty("--grow", Math.min(1 + dodges * 0.06, 1.6)));
+  }
+
+  // Find a nearby spot around the button's starting point: on screen, away
+  // from the pointer, not covering other buttons, and on a different side.
+  function pickSpot(btn, w, h, cur, px, py) {
+    const margin = 12;
+    const home = btn._home;
+    const others = [...document.querySelectorAll(".btn, .day")]
+      .filter(b => b !== btn)
+      .map(b => b.getBoundingClientRect());
+    const onScreen = p =>
+      p.x - w / 2 >= margin && p.x + w / 2 <= window.innerWidth - margin &&
+      p.y - h / 2 >= margin && p.y + h / 2 <= window.innerHeight - margin;
+    const clearOfOthers = p => others.every(o =>
+      p.x + w / 2 < o.left - 10 || p.x - w / 2 > o.right + 10 ||
+      p.y + h / 2 < o.top - 10 || p.y - h / 2 > o.bottom + 10);
+
+    for (const [minR, maxR] of [[100, 160], [100, 230], [60, 320]]) {
+      const options = [];
+      for (let deg = 0; deg < 360; deg += 20) {
+        const a = deg * Math.PI / 180;
+        const radius = minR + Math.random() * (maxR - minR);
+        const p = { x: home.x + Math.cos(a) * radius, y: home.y + Math.sin(a) * radius };
+        if (onScreen(p) && clearOfOthers(p) &&
+            Math.hypot(p.x - px, p.y - py) > 130 &&     // away from the cursor
+            Math.hypot(p.x - cur.x, p.y - cur.y) > 110) // visibly hops to another side
+          options.push(p);
+      }
+      if (options.length) return options[Math.floor(Math.random() * options.length)];
+    }
+    return home; // nowhere better: go back to the start
+  }
+
+  // Keep runaway buttons on screen if the window is resized
+  window.addEventListener("resize", () => {
+    document.querySelectorAll(".run.runaway").forEach(btn => {
+      const r = btn.getBoundingClientRect();
+      btn.style.left = Math.min(Math.max(r.left, 12), window.innerWidth - r.width - 12) + "px";
+      btn.style.top = Math.min(Math.max(r.top, 12), window.innerHeight - r.height - 12) + "px";
+    });
+  });
+
+  function clearRunaways() {
+    document.querySelectorAll(".run.runaway").forEach(b => b.remove());
+  }
+
+  function showFinal() {
+    clearRunaways();
+    setTheme(FINAL.theme);
+    card.className = "card celebrate";
+    card.style.animation = "none"; card.offsetWidth; card.style.animation = "";
+    card.innerHTML = `
+      <div class="emoji">${FINAL.emoji}</div>
+      <h1>${text(FINAL.title)}</h1>
+      <p>${text(FINAL.message)}</p>
+      <div class="recap">
+        <div class="recap-title">${FINAL.recapTitle}</div>
+        ${state.answers.map(r => `
+          <div class="recap-row"><span>${r.q}</span><b>${r.a}</b></div>`).join("")}
+        <div class="recap-dodges">${FINAL.dodgeLine(state.dodges)}</div>
+      </div>
+      <a class="btn whatsapp" target="_blank" rel="noopener">${FINAL.whatsappButton}</a>`;
+    const msg = FINAL.whatsappMessage(state); // plain text, so the raw name is fine
+    card.querySelector(".whatsapp").href =
+      `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+    confetti();
+    playCheer();
+  }
+
+  function confetti() {
+    const colors = ["#ff5fa2", "#ff9a3c", "#ffd23f", "#84fab0", "#8fd3f4", "#a18cd1"];
+    for (let i = 0; i < 150; i++) {
+      const c = document.createElement("div");
+      c.className = "confetti";
+      c.style.left = Math.random() * 100 + "vw";
+      c.style.background = colors[i % colors.length];
+      c.style.animationDuration = 2.5 + Math.random() * 2.5 + "s";
+      c.style.animationDelay = Math.random() * 0.8 + "s";
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 6000);
+    }
+  }
+
+  showQuestion(0);
+</script>
+</body>
+</html>
